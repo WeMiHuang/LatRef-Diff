@@ -6,7 +6,7 @@ Facial attribute editing and style manipulation are crucial for applications lik
 
 ## Model
 ### Overview of the proposed LatRef-Diff.
-![LatRef-Diff](https://raw.githubusercontent.com/WeMiHuang/LatRef-Diff/blob/main/framework.png)
+![LatRef-Diff](framework.png)
 
 ## Pre-trained Model
 The model checkpoint can be downloaded using [Google Drive link](https://drive.google.com/drive/folders/1RgHAGFYy-KvT266AV8SuSI2Gba9e5Ap1?usp=sharing). The checkpoint should be located in the path checkpoints/ffhq256_autoenc.
