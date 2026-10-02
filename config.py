@@ -304,28 +304,7 @@ class TrainConfig(BaseConfig):
         else:
             raise NotImplementedError()
 
-    def get_data_iters(self, conf):  # 创建数据集CeleAHQ
-        batch_size = conf.batch_size
-        new_size = conf.img_size  # 图像大小
-        height = conf.img_size
-        width = conf.img_size
-        tags = conf.tags
 
-        transform_list = [transforms.ToTensor(),
-                          transforms.Normalize((0.5, 0.5, 0.5),
-                                               (0.5, 0.5, 0.5))]
-        transform_list = [transforms.RandomCrop((height, width))] + transform_list
-        transform_list = [transforms.Resize(new_size)] + transform_list  # 从1024调整到256
-        #transform_list = [transforms.RandomHorizontalFlip()] + transform_list
-        #transform_list = [transforms.ColorJitter(0.1, 0.1, 0.1, 0.1)] + transform_list
-        transform = transforms.Compose(transform_list)  # 预处理：剪裁，翻转，颜色随机调整（亮度，对比度，饱和度，色调）
-
-        data = [[ImageAttributeDataset(tags[i]['attributes'][j]['filename'], transform)
-            for j in range(len(tags[i]['attributes']))] for i in range(len(tags))]
-        # loaders[i][j]:第i个tag的第j个属性的图像加载器
-
-
-        return data  # data[i][j]:第i个tag的第j个属性的图像加载器,每个加载器Bach size是8
 
     def make_loader(self,
                     dataset,
@@ -353,31 +332,7 @@ class TrainConfig(BaseConfig):
             multiprocessing_context=get_context('fork'),
         )
 
-    def make_loader_CelebAHQ(self,                        #创建数据加载对象
-                    dataset,
-                    shuffle: bool,
-                    num_worker: bool = None,
-                    drop_last: bool = True,
-                    batch_size: int = None,
-                    parallel: bool = False):
-        if parallel and distributed.is_initialized():
-            # drop last to make sure that there is no added special indexes
-            sampler = DistributedSampler(dataset,
-                                         shuffle=shuffle,
-                                         drop_last=True)
-        else:
-            sampler = None
-        return DataLoader(
-            dataset,
-            batch_size=batch_size or self.batch_size,  #EDIT   #batch为1，既每个batch加载一个视频，含4张图像
-            sampler=sampler,
-            # with sampler, use the sample instead of this option
-            shuffle=False if sampler else shuffle,
-            num_workers=num_worker or self.num_workers,
-            pin_memory=True,
-            drop_last=drop_last,
-            multiprocessing_context=get_context('fork'),
-        )
+
 
     def make_model_conf(self):
         if self.model_name == ModelName.beatgans_ddpm:

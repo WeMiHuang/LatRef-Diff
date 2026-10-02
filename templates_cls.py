@@ -1,17 +1,6 @@
 from templates import *
 
 from experiment import *
-tags=[{'name':'Bangs',
-    'attributes':[{'name':'without','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/Bangs_without.txt','text':'face without bangs'},
-                  {'name':'with','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/Bangs_with.txt','text':'face with bangs'}]},
-{'name':'Eyeglasses',
-    'attributes':[{'name':'without','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/Eyeglasses_without.txt','text':'face without eyeglasses'},
-                  {'name':'with','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/Eyeglasses_with.txt','text':'face with eyeglasses'}]},
-{'name':'HairColor',
-    'attributes':[{'name':'black','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/HairColor_black.txt','text':'face with black hair'},
-                  {'name':'blond','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/HairColor_blond.txt','text':'face with blond hair'},
-                  {'name':'brown','filename': '/home/huangwenmin/SDGAN/preprocessors/databese/HairColor_brown.txt','text':'face with brown hair'}]},
-      ]
 
 def ddpm():
     """
@@ -40,7 +29,7 @@ def ddpm():
     return conf
 
 
-def autoenc_base():   #基本配置
+def autoenc_base():
     """
     base configuration for all Diff-AE models.
     """
@@ -80,7 +69,7 @@ def ffhq64_ddpm():
     return conf
 
 
-def ffhq64_autoenc():   #网络层，迭代次数配置
+def ffhq64_autoenc():
     conf = autoenc_base()
     conf.data_name = 'ffhqlmdb256'
     conf.warmup = 0
@@ -104,7 +93,7 @@ def celeba64d2c_ddpm():
     return conf
 
 
-def celeba64d2c_autoenc():    #迭代次数配置
+def celeba64d2c_autoenc():
     conf = ffhq64_autoenc()
     conf.data_name = 'celebalmdb'
     conf.eval_every_samples = 10_000_000

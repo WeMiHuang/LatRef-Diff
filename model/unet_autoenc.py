@@ -36,10 +36,7 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
             time_out_channels=conf.embed_channels,
         )
 
-        #self.fu = Fusion()
-        #self.decoder=BeatGANsDecoderModel(conf)
-
-        self.encoder = BeatGANsEncoderConfig(       #语义编码器
+        self.encoder = BeatGANsEncoderConfig(
             image_size=conf.image_size,
             in_channels=conf.in_channels,
             model_channels=conf.model_channels,
@@ -87,21 +84,21 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
         assert self.conf.noise_net_conf is not None
         return self.noise_net.forward(noise)
 
-    def encode(self, x,return_2d_feature=None,super=None,selected=None,latent=None):   #语义编码器
+    def encode(self, x,return_2d_feature=None,super=None,selected=None,latent=None):
         if return_2d_feature==None:
             cond = self.encoder.forward(x,super=super,selected=selected,latent=latent)
-            return {'cond': cond}  #返回语义编码
+            return {'cond': cond}
         else:
             cond,d2_feature = self.encoder.forward(x,return_2d_feature=True,super=super,selected=selected,latent=latent)
-            return {'cond': cond,'d2_feature':d2_feature}  # 返回语义编码
+            return {'cond': cond,'d2_feature':d2_feature}
 
-    def encode2(self, x,return_2d_feature=None):   #语义编码器
+    def encode2(self, x,return_2d_feature=None):
         if return_2d_feature==None:
             cond = self.encoder2.forward(x)
-            return {'cond': cond}  #返回语义编码
+            return {'cond': cond}
         else:
             cond,d2_feature = self.encoder2.forward(x,return_2d_feature=True)
-            return {'cond': cond,'d2_feature':d2_feature}  # 返回语义编码
+            return {'cond': cond,'d2_feature':d2_feature}
 
     @property
     def stylespace_sizes(self):
@@ -138,9 +135,9 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
     def forward(self,
                 x,
                 t,
-                tag,ttt=None,
+                tag,
                 y=None,
-                x_start=None,
+                x_start=None,inference=False,
                 cond_s=None,CA_condision=None,
                 fusion=None,selected=None,
                 cond=None,
@@ -158,7 +155,7 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
         """
 
         if t_cond is None:
-            t_cond = t   #时间嵌入
+            t_cond = t
 
         if noise is not None:
             # if the noise is given, we predict the cond from noise
@@ -172,38 +169,29 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
 
 
             if cond_s is None:
-                tmp = self.encode(x_start, return_2d_feature=True)  # 从输入图像生成z，风格嵌入
+                tmp = self.encode(x_start, return_2d_feature=True)
                 diff = None
                 cond = tmp['cond']
-                #CA_condision = fusion.transform(x_start)[:,tag[0]]
             else:
                 if isinstance(cond_s,list):
                     cond_s = cond_s
-                if isinstance(cond_s,tuple):#cond_s.size(1) != 512:
+                if isinstance(cond_s,tuple):
                     tmp = self.encode(x_start, return_2d_feature=True, super=(fusion, cond_s, tag), selected=selected,
                                       latent=True)
 
                 else:
-                    cond_s = self.encoder2(cond_s)
+                    cond_s = self.encoder2(cond_s,return_2d_feature=True)[1][1]
                     tmp = self.encode(x_start, return_2d_feature=True, super=(fusion, cond_s, tag), selected=selected)
-                    # 从输入图像生成z，风格嵌入,调制
+
                 cond = tmp['cond']
                 diff=tmp['d2_feature']
-                CA_condision=diff[2]#cond#
-                #if ttt==True:
-                tmp = self.encode(x_start, return_2d_feature=True)  # 从输入图像生成z，风格嵌入
+
+                tmp = self.encode(x_start, return_2d_feature=True)
                 diff = None
                 cond_ = tmp['cond']
                 direciton = cond - cond_
-                cond = cond_ + 1.7*direciton
+                cond = cond_ + 0.9*direciton
 
-                # topk_values, topk_indices = torch.topk(direction, 30, dim=1)
-                # result = torch.zeros_like(direction).cuda()
-                # result.scatter_(1, topk_indices, topk_values)
-
-                #cond,diff = fusion(cond,cond_s,tag,tmp['d2_feature'])
-
-        #########################
         else:
             diff = None
             tmp = self.encode(x_start, return_2d_feature=True)
@@ -266,13 +254,6 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
             k = 0
             for i in range(len(self.input_num_blocks)):
                 for j in range(self.input_num_blocks[i]):
-                    '''if k in [13,14]:
-                        #h_=fusion.CrossAttentions[ca](h,CA_condision)
-                        h = self.input_blocks[k](h,
-                                                 emb=(enc_time_emb,fusion.CrossAttentions[ca],CA_condision),
-                                                 cond=enc_cond_emb)
-                        ca+=1
-                    else:'''
                     h = self.input_blocks[k](h,
                                              emb=enc_time_emb,
                                              cond=enc_cond_emb)
@@ -283,7 +264,6 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
             assert k == len(self.input_blocks)
 
             # middle blocks
-            #h = self.middle_block(h, emb=(mid_time_emb,fusion.CrossAttentions[ca],CA_condision), cond=mid_cond_emb)
             h = self.middle_block(h, emb=mid_time_emb, cond=mid_cond_emb)
 
             ca+=1
@@ -305,14 +285,6 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
                 except IndexError:
                     lateral = None
                     # print(i, j, lateral)
-                '''if k in [3,4,5]:
-                    h = self.output_blocks[k](h,
-                                              emb=(dec_time_emb,fusion.CrossAttentions[ca],CA_condision),
-                                              cond=dec_cond_emb,
-                                              lateral=lateral)
-                    ca+=1
-
-                else:'''
 
                 h = self.output_blocks[k](h,
                                               emb=dec_time_emb,
@@ -321,141 +293,9 @@ class BeatGANsAutoencModel(BeatGANsUNetModel):
                 k += 1
 
         pred = self.out(h)
-        return AutoencReturn(pred=pred, cond=cond, d2_feature=tmp['d2_feature'],cond_ori=cond_s,diff=diff)  #返回预测的噪声和语义风格向量
+        return AutoencReturn(pred=pred, cond=cond, d2_feature=tmp['d2_feature'],cond_ori=cond_s,diff=diff)
 
 
-    def forward2(self,
-                x,
-                t,
-                y=None,
-                cond=None,
-                style=None,
-                t_cond=None,
-                **kwargs):
-        """
-        Apply the model to an input batch.
-
-        Args:
-            x_start: the original image to encode
-            cond: output of the encoder
-            noise: random noise (to predict the cond)
-        """
-        if t_cond is None:
-            t_cond = t   #时间嵌入
-        if t is not None:
-            _t_emb = timestep_embedding(t, self.conf.model_channels)
-            _t_cond_emb = timestep_embedding(t_cond, self.conf.model_channels)
-        else:
-            # this happens when training only autoenc
-            _t_emb = None
-            _t_cond_emb = None
-
-        if self.conf.resnet_two_cond:
-            res = self.time_embed.forward(
-                time_emb=_t_emb,
-                cond=cond,
-                time_cond_emb=_t_cond_emb,
-            )
-        else:
-            raise NotImplementedError()
-
-        if self.conf.resnet_two_cond:   #yes
-            # two cond: first = time emb, second = cond_emb
-            emb = res.time_emb
-            cond_emb = res.emb
-        else:
-            # one cond = combined of both time and cond
-            emb = res.emb
-            cond_emb = None
-
-        # override the style if given
-        style = style or res.style
-
-        assert (y is not None) == (
-            self.conf.num_classes is not None
-        ), "must specify y if and only if the model is class-conditional"
-
-        if self.conf.num_classes is not None:
-            raise NotImplementedError()
-            # assert y.shape == (x.shape[0], )
-            # emb = emb + self.label_emb(y)
-
-        # where in the model to supply time conditions
-        enc_time_emb = emb
-        mid_time_emb = emb
-        dec_time_emb = emb
-        # where in the model to supply style conditions
-        enc_cond_emb = cond_emb
-        mid_cond_emb = cond_emb
-        dec_cond_emb = cond_emb
-
-        # hs = []
-        hs = [[] for _ in range(len(self.conf.channel_mult))]
-        ca=0
-
-        if x is not None:
-            h = x.type(self.dtype)
-
-            # input blocks
-            k = 0
-            for i in range(len(self.input_num_blocks)):
-                for j in range(self.input_num_blocks[i]):
-                    '''if k in [13,14]:
-                        #h_=fusion.CrossAttentions[ca](h,CA_condision)
-                        h = self.input_blocks[k](h,
-                                                 emb=(enc_time_emb,fusion.CrossAttentions[ca],CA_condision),
-                                                 cond=enc_cond_emb)
-                        ca+=1
-                    else:'''
-                    h = self.input_blocks[k](h,
-                                             emb=enc_time_emb,
-                                             cond=enc_cond_emb)
-
-                    # print(i, j, h.shape)
-                    hs[i].append(h)
-                    k += 1
-            assert k == len(self.input_blocks)
-
-            # middle blocks
-            #h = self.middle_block(h, emb=(mid_time_emb,fusion.CrossAttentions[ca],CA_condision), cond=mid_cond_emb)
-            h = self.middle_block(h, emb=mid_time_emb, cond=mid_cond_emb)
-
-            ca+=1
-        else:
-            # no lateral connections
-            # happens when training only the autonecoder
-            h = None
-            hs = [[] for _ in range(len(self.conf.channel_mult))]
-
-        # output blocks
-        k = 0
-        for i in range(len(self.output_num_blocks)):
-            for j in range(self.output_num_blocks[i]):
-                # take the lateral connection from the same layer (in reserve)
-                # until there is no more, use None
-                try:
-                    lateral = hs[-i - 1].pop()
-                    # print(i, j, lateral.shape)
-                except IndexError:
-                    lateral = None
-                    # print(i, j, lateral)
-                '''if k in [3,4,5]:
-                    h = self.output_blocks[k](h,
-                                              emb=(dec_time_emb,fusion.CrossAttentions[ca],CA_condision),
-                                              cond=dec_cond_emb,
-                                              lateral=lateral)
-                    ca+=1
-
-                else:'''
-
-                h = self.output_blocks[k](h,
-                                              emb=dec_time_emb,
-                                              cond=dec_cond_emb,
-                                              lateral=lateral)
-                k += 1
-
-        pred = self.out(h)
-        return AutoencReturn2(pred=pred)  #返回预测的噪声和语义风格向量
 
 
 class AutoencReturn(NamedTuple):

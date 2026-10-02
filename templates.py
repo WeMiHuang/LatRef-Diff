@@ -1,14 +1,16 @@
 from experiment import *
 tags=[{'name':'Male',
-    'attributes':[{'name':'without','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Male_without.txt','text':'face without bangs'},
-                  {'name':'with','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Male_with.txt','text':'face with bangs'}]},
+    'attributes':[{'name':'without','filename': '/home/SDGAN/preprocessors/databese-L2M/Male_without.txt'},
+                  {'name':'with','filename': '/home/SDGAN/preprocessors/databese-L2M/Male_with.txt'}]},
 {'name':'Young',
-    'attributes':[{'name':'without','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Young_without.txt','text':'face without eyeglasses'},
-                  {'name':'with','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Young_with.txt','text':'face with eyeglasses'}]},
+    'attributes':[{'name':'without','filename': '/home/SDGAN/preprocessors/databese-L2M/Young_without.txt'},
+                  {'name':'with','filename': '/home/SDGAN/preprocessors/databese-L2M/Young_with.txt'}]},
 {'name':'Smiling',
-    'attributes':[{'name':'without','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Smiling_without.txt','text':'face without eyeglasses'},
-                  {'name':'with','filename': '/home/huangwenmin/SDGAN/preprocessors/databese-L2M/Smiling_with.txt','text':'face with eyeglasses'}]},
+    'attributes':[{'name':'without','filename': '/home/SDGAN/preprocessors/databese-L2M/Smiling_without.txt'},
+                  {'name':'with','filename': '/home/SDGAN/preprocessors/databese-L2M/Smiling_with.txt'}]},
       ]
+
+
 
 def ddpm():
     """
@@ -37,7 +39,7 @@ def ddpm():
     return conf
 
 
-def autoenc_base():   #基本配置
+def autoenc_base():
     """
     base configuration for all Diff-AE models.
     """
@@ -49,7 +51,7 @@ def autoenc_base():   #基本配置
     conf.diffusion_type = 'beatgans'
     conf.eval_ema_every_samples = 200_000
     conf.eval_every_samples = 200_000
-    conf.fp16 = True
+    conf.fp16 = False         #True
     conf.lr = 1e-4
     conf.model_name = ModelName.beatgans_autoenc
     conf.net_attn = (16, )
@@ -60,8 +62,8 @@ def autoenc_base():   #基本配置
     conf.net_ch = 64
     conf.net_enc_channel_mult = (1, 2, 4, 8, 8)
     conf.net_enc_pool = 'adaptivenonzero'
-    conf.sample_size = 32
-    conf.T_eval = 200
+    conf.sample_size = 20
+    conf.T_eval = 100
     conf.T = 1000
     conf.make_model_conf()
     conf.tags = tags
@@ -77,7 +79,7 @@ def ffhq64_ddpm():
     return conf
 
 
-def ffhq64_autoenc():   #网络层，迭代次数配置
+def ffhq64_autoenc():
     conf = autoenc_base()
     conf.data_name = 'ffhqlmdb256'
     conf.warmup = 0
@@ -101,7 +103,7 @@ def celeba64d2c_ddpm():
     return conf
 
 
-def celeba64d2c_autoenc():    #迭代次数配置
+def celeba64d2c_autoenc():
     conf = ffhq64_autoenc()
     conf.data_name = 'celebalmdb'
     conf.eval_every_samples = 10_000_000
@@ -157,7 +159,7 @@ def ffhq256_autoenc():
     conf.eval_every_samples = 10_000_000
     conf.eval_ema_every_samples = 10_000_000
     conf.total_samples = 200_000_000
-    conf.batch_size = 6
+    conf.batch_size = 15
     conf.make_model_conf()
     conf.name = 'ffhq256_autoenc'
     return conf

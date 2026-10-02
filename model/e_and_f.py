@@ -17,14 +17,11 @@ import torch.nn.functional as F
 from choices import *
 from config_base import BaseConfig
 from .blocks import *
-from .generator import  Generator
 import math
 import random
 from inspect import isfunction
 from einops import rearrange
 from torch import nn, einsum
-from .discriminator import Decoder
-#from .e_and_f import Extractors
 
 try:
     import xformers
@@ -66,110 +63,196 @@ class LinearBlock(nn.Module):
     def forward(self, x):
         return self.linear(self.activ(x))
 
-#AttentionBlock(512,use_checkpoint=False,num_heads=1,num_head_channels=-1,use_new_attention_order=False)
 
-class Extractors_(nn.Module):   #风格提取器
-    def __init__(self, ):
+import torch
+import torch.nn as nn
+
+class AttributeBranch(nn.Module):
+    def __init__(
+        self,
+        num_attributes,
+        token_dim=512,
+        model_dim=256,
+        num_heads=4,
+        num_layers=2,
+        style_dim=256,
+        w_dim=512,
+        w_blocks=16
+    ):
         super().__init__()
-        self.num_tags = 3#len(hyperparameters.tags)   #3
-        channels = [32, 64, 128, 256, 256, 512, 512]
-        self.out=nn.Conv2d(channels[-1], 512 * (self.num_tags), 1, 1, 0)
-        self.model = nn.Sequential(
-            nn.Conv2d(3, channels[0], 1, 1, 0),
-            *[DownBlock(channels[i], channels[i + 1]) for i in range(len(channels) - 1)],                                                             #8*512*1*1   #8*（256*3）
-        )  #输出的向量的长度为风格特征维度*tag数量
-
-        self.AdainResBlk2 = SpatialTransformer(512)
-        self.token = nn.ParameterList([nn.Parameter(torch.zeros(1, 10, 512)) for i in range(7)])
-
-        self.out = nn.ModuleList([nn.Conv2d(channels[-1], 512, 1, 1, 0) for i in range(7)])
-    def forward(self, x,tag,tag_j_trg):  #8*3*256*256
-        s_bg = self.model(x)
-
-        s=self.AdainResBlk2(s_bg,self.token[tag*2+tag_j_trg].repeat(x.size(0),1,1))
-
-        s=F.adaptive_avg_pool2d(s,1)
+        self.token_dim = token_dim
+        self.model_dim = model_dim
+        self.token_count = 16
+        self.total_tokens = 1 + self.token_count
 
 
-        s=self.out[tag](s).view(x.size(0), -1)   #8*3*256
-        return s#,s_bg.squeeze(-1).squeeze(-1)#[:, i]  #8*256选第i个tag的风格特征返回
-
-class Extractors__(nn.Module):   #风格提取器
-    def __init__(self, ):
-        super().__init__()
-        self.num_tags = 3#len(hyperparameters.tags)   #3
-        channels = [32, 64, 128, 256, 256, 512, 512]
-        self.out=nn.Conv2d(channels[-1], 512 * (self.num_tags), 1, 1, 0)
-        self.out_co = nn.Conv2d(128, 512 * (self.num_tags), 1, 1, 0)
-        self.out_mid = nn.Conv2d(256, 512 * (self.num_tags), 1, 1, 0)
-        self.model = nn.ModuleList([
-            nn.Conv2d(3, channels[0], 1, 1, 0),
-            *[DownBlock(channels[i], channels[i + 1]) for i in range(len(channels) - 1)],
-            nn.AdaptiveAvgPool2d(1),]                                                             #8*512*1*1   #8*（256*3）
-        )  #输出的向量的长度为风格特征维度*tag数量
-
-    def forward(self, x,tag):  #8*3*256*256
-        out=[]
-        co=self.model[2](self.model[1](self.model[0](x)))
-        co_s=self.out_co(F.adaptive_avg_pool2d(co,1)).view(x.size(0), self.num_tags, -1)[:,tag]
-        out.append(co_s)
-
-
-
-        mid=self.model[4](self.model[3](co))
-        mid_s = self.out_mid(F.adaptive_avg_pool2d(mid, 1)).view(x.size(0), self.num_tags, -1)[:, tag]
-        out.append(mid_s)
-
-        s_bg=self.model[6](self.model[5](mid))
-        s_bg = self.model[7](s_bg)
-        s=self.out(s_bg).view(x.size(0), self.num_tags, -1)[:,tag]  #8*3*256
-        out.append(s)
-
-        return out#.squeeze(-1).squeeze(-1)#[:, i]  #8*256选第i个tag的风格特征返回
-
-class Extractors(nn.Module):   #风格提取器
-    def __init__(self, ):
-        super().__init__()
-        style_dim=512
-        #self.out=nn.Linear(512, 512 * 3)
-        #self.out2=nn.ModuleList([nn.Linear(512, 512 * 4),nn.Linear(512, 512 * 4),nn.Linear(512, 512 * 4)])
-        self.out = nn.ModuleList([nn.Sequential(nn.Linear(style_dim, style_dim)
-                                                , nn.ReLU()
-                                                , nn.Linear(style_dim, style_dim)) for i in range(3)])
-
-        self.out2 = nn.ModuleList([nn.Sequential(nn.Linear(style_dim, style_dim)
-                                                 , nn.ReLU()
-                                                 , nn.Linear(style_dim, style_dim * 4)) for i in range(3)])
-
-    def forward(self, x,tag):  #8*3*256*256
-
-
-
-        #s=self.out(x).view(x.size(0), 3, -1)[:,tag]    #8*3*256
-        s = self.out[tag](x)  # 8*256
-        cond = self.out2[tag](x).view(x.size(0), 4, 512)
-        return s,cond#,s_bg.squeeze(-1).squeeze(-1)#[:, i]  #8*256选第i个tag的风格特征返回
-
-class Mapper(nn.Module):
-    def __init__(self, num_attributes): #[256,256,256]
-        super().__init__()
-        channels = [256, 256, 512]
-        self.pre_model = nn.Sequential(
-            nn.Linear(32, channels[0]),
-            *[LinearBlock(channels[i], channels[i + 1]) for i in range(len(channels) - 1)]
+        self.attribute_tokens = nn.Parameter(
+            torch.randn(6, token_dim)
         )
 
-        channels = [512, 512, 512]
-        self.post_models = nn.ModuleList([nn.Sequential(
-            *[LinearBlock(channels[i], channels[i + 1]) for i in range(len(channels) - 1)],
-            nn.Linear(channels[-1], 512*5),
-            ) for i in range(num_attributes)
+
+        self.token_proj = nn.Linear(token_dim, model_dim)
+        self.pos_emb = nn.Parameter(
+            torch.randn(1, self.total_tokens, model_dim)
+        )
+
+        # ——— Transformer Encoder ———
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=model_dim,
+            nhead=num_heads,
+            dim_feedforward=model_dim * 4,
+            dropout=0.1,
+            activation='gelu',
+            batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        self.style_head = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(model_dim, style_dim),
+                nn.Dropout(0.1)
+            )
+            for _ in range(3)
+        ])
+        self.w_head = nn.ModuleList([nn.Linear(model_dim, w_dim * w_blocks)
+            for _ in range(3)
         ])
 
-    def forward(self, z, j):
-        z = self.pre_model(z)  #8*256
-        z = self.post_models[j](z)
-        return z[:,:512],z[:,512:].view(z.size(0),4,512)  #8*256
+    def forward(self, token_seq, tag,j):
+
+        B = token_seq.size(0)
+
+
+        attr_token = self.attribute_tokens[2*tag+j] \
+                         .unsqueeze(0) \
+                         .expand(B, 1, self.token_dim)  # (B,1,512)
+
+
+        x = torch.cat([attr_token, token_seq], dim=1)  # (B, 17, 512)
+
+
+        x = self.token_proj(x)                          # (B, 17, model_dim)
+        x = x + self.pos_emb
+        x = self.encoder(x)                             # (B, 17, model_dim)
+        cls_token = x[:, 0]                             # (B, model_dim)
+
+
+        style = self.style_head[tag](cls_token)              # (B, 256)
+        w = self.w_head[tag](cls_token)                      # (B, 16*512)
+        w = w.view(B, self.token_count, -1)             # (B, 16, 512)
+
+        return style, w
+
+class Extractors(nn.Module):
+    def __init__(self, num_attributes=3):
+        super().__init__()
+        self.branches = AttributeBranch(num_attributes=num_attributes)
+
+    def forward(self, x, tag,j):
+
+        B = x.size(0)
+        # (B, 512, 4, 4) → (B, 16, 512)
+        token_seq = x.view(B, 512, -1).transpose(1, 2)
+
+        style, w = self.branches(token_seq, tag,j)
+        return style, w, (0, 0)
+
+
+class Mapper(nn.Module):
+    def __init__(
+        self,
+        num_attributes,
+        seq_len=4,
+        latent_dim=32,
+        model_dim=256,
+        num_heads=4,
+        num_layers=3,
+    ):
+        super().__init__()
+        self.seq_len = seq_len
+        self.model_dim = model_dim
+        self.total_len = seq_len + 1  # +1 for image token
+
+        # === z token embedding ===
+        self.token_embed = nn.Linear(latent_dim, model_dim)
+        self.pos_emb = nn.Parameter(torch.randn(1, self.total_len, model_dim))
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=model_dim,
+            nhead=num_heads,
+            dim_feedforward=model_dim * 4,
+            activation='gelu',
+            batch_first=True,
+            dropout=0.1
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        flat_dim = self.total_len * model_dim
+
+        self.style_heads = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(flat_dim, 256),
+                #nn.LayerNorm(256),
+                nn.Dropout(0.1)
+            ) for _ in range(num_attributes)
+        ])
+        self.w_heads = nn.ModuleList([
+            nn.Linear(flat_dim, 16 * 512)
+            for _ in range(num_attributes)
+        ])
+
+    def forward(self, z, j, image):
+        B, T, _ = z.shape
+        assert T == self.seq_len
+
+
+        z_tokens = self.token_embed(z)                      # (B, T, D)
+        x = torch.cat([image, z_tokens], dim=1) + self.pos_emb
+
+        x = self.transformer(x)
+        x_flat = x.view(B, -1)
+
+
+        style = self.style_heads[j](x_flat)
+        w = self.w_heads[j](x_flat)
+
+
+        return style, w.view(B, 16, 512)
+
+
+class ImageE(nn.Module):
+    def __init__(
+        self,
+    ):
+        super().__init__()
+
+        self.image_encoder = nn.Sequential(
+            nn.Conv2d(3, 64, 4, 2, 1),  # 128x128
+            nn.ReLU(),
+            nn.Conv2d(64, 128, 4, 2, 1),  # 64x64
+            nn.ReLU(),
+            nn.Conv2d(128, 256, 4, 2, 1),  # 32x32
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),  # (B, 256)
+            nn.Linear(256, 256)
+        )
+
+
+    def forward(self, image):
+        assert image.shape[1:] == (3, 256, 256)
+
+        img_token = self.image_encoder(image).unsqueeze(1)  # (B, 1, D)
+
+
+
+        return img_token
+
+
+
+
+
+
 
 def exists(val):
     return val is not None

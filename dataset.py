@@ -154,7 +154,7 @@ class FFHQlmdb(Dataset):
         self.data = BaseLMDB(path, original_resolution, zfill=5)
         self.length = len(self.data)   #70001
 
-        if split is None:  #全部图像用于训练
+        if split is None:
             self.offset = 0
         elif split == 'train':
             # last 60k
@@ -210,8 +210,7 @@ class ImageAttributeDataset(Dataset):
         conditions = [int(condition) for condition in line[1:3]]
         # atts = [int(att) for att in line[3:]]
         atts = [int(att) for att in line[1:]]
-        return {'img': self.transform(image), 'index': index, 'attr': (torch.Tensor(conditions), torch.Tensor(atts)),
-                'mask': mask}
+        return {'img':self.transform(image), 'index':index, 'attr':(torch.Tensor(conditions),torch.Tensor(atts)),'mask':mask}
 
     def __len__(self):
         """Return the number of images."""
@@ -470,7 +469,7 @@ class CelebAttrDataset(Dataset):
 
 class CelebD2CAttrDataset(CelebAttrDataset):
     """
-    the dataset is used in the D2C paper. 
+    the dataset is used in the D2C paper.
     it has a specific crop from the original CelebA.
     """
     def __init__(self,
