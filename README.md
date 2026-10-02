@@ -6,3 +6,4 @@ Facial attribute editing and style manipulation are crucial for applications lik
 
 ## Model
 ### Overview of the proposed LatRef-Diff.
+![LatRef-Diff](https://raw.githubusercontent.com/WeMiHuang/LatRef-Diff/blob/main/framework.png)
